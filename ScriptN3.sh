@@ -7,6 +7,9 @@
 # Lucas de Paula - 
 # Kaio Cesar - 
 #===============================================================================
+# Link para o script:
+# (https://github.com/invenktive/gerenciador-processos-BASH/blob/master/ScriptN3.sh)
+#===============================================================================
 #
 #                       Script Gerenciador de Processos v0.1.0
 #

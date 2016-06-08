@@ -4,8 +4,8 @@
 # Sistemas Operacionais - N3
 #===============================================================================
 # William Hanemann da Silva - william.hanemann@gmail.com
-# Lucas de Paula - 
-# Kaio Cesar - 
+# Lucas de Paula - lucasdepaulags@gmail.com
+# Kaio Cesar Ramos - kaio_cesar_ramos@hotmail.com
 #===============================================================================
 # Link para o script:
 # (https://github.com/invenktive/gerenciador-processos-BASH/blob/master/ScriptN3.sh)

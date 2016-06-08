@@ -48,8 +48,6 @@
 # 
 #=============================================================================== 
 
-
-
 # Variaveis
 
 tmpHeader=$(mktemp) # Cria arquivo temporário e armazena o caminho na variável tmpHeader.
@@ -143,9 +141,9 @@ getProc(){ # Função: Escolher processo específico.
             --title 'Escolher Processo' \
             --checklist 'Quais processos deseja gerenciar?' \
             0 0 0 \
-            $(ps --no-header -o user,pid,comm | tr -s " "  | cut -d " " -f 2,3 | cat -E  | cut -d"$" -f 1- --output-delimiter " off " || errorMsg) || $backTo) \
-         ; $backTo ;;
+            $(ps --no-header -o user,pid,comm | tr -s " "  | cut -d " " -f 2,3 | cat -E  | cut -d"$" -f 1- --output-delimiter " off " || errorMsg) || $backTo) ;;
       # Acima: Caso a escolha seja "Lista", mostra um menu com uma lista dos processos disponíveis.
+      menuEditProc # Vai para o menu onde os processos escolhidos poderão ser gerenciados.
    PID) getProc=$( \
       dialog \
          --backtitle 'Gerenciador de Processos' \
@@ -154,6 +152,7 @@ getProc(){ # Função: Escolher processo específico.
          --inputbox 'Digite o PID. Para varios PIDs, separe-os utilizando espacos.\n\nAtencao para a digitacao correta!' \
          0 0 || $backTo) ;;
       # Acima: Caso a escolha seja "PID", o usuário insere, através do dialog, o(s) PID(s) que desejar.
+      menuEditProc # Vai para o menu onde os processos escolhidos poderão ser gerenciados.
    Localizar) findPID=$( \
          ps -C \
             $(dialog \
@@ -163,20 +162,15 @@ getProc(){ # Função: Escolher processo específico.
                --inputbox 'Digite o nome do processo' \
                0 0 || $backTo) \
             --no-header -o user,pid,cmd | tr -s " " | cut -d' ' -f2 | paste -sd' ' || errorMsg) \
-         ; dialog \
+         ; (dialog \
             --backtitle 'Gerenciador de Processos' \
             --stdout \
             --title 'Localizador de PIDs' \
             --yes-label 'Sim' \
             --no-label 'Nao' \
             --yesno "\nPIDs encontrados para este processo:\n\n$findPID\n\nDeseja utiliza-los no gerenciador?\n" \
-            0 0 || $backTo \
-         ; if [ $? -eq 1 ] \
-            ; then menuEditProc \
-            ; elif [ $? -eq 0 ] \
-               ; then getProc=$findPID \
-            ; else menuEditProc \
-         ; fi ;; 
+            0 0 || $backTo) \
+         ; getProc=$findPID ; menuEditProc;;
       # Acima: Caso a escolha seja "Localizar", o usuário insere, através do dialog, o nome do processo que procura; o comando ps lista os processos com este nome.
       # Utilizando a filtragem no comando ps, é extraida uma lista de PIDs que é formatada adequadamente para uso futuro.
    esac # Fim da condição.
@@ -616,6 +610,7 @@ fi #Fim da condição
 #
 
 ###########################################################################################
+#
 #Fonte bibliografica
 #
 #http://web.mit.edu/gnu/doc/html/features_5.html

@@ -64,8 +64,18 @@ errorMsg(){
    dialog \
       --backtitle 'Gerenciador de Processos' \
       --title 'Aviso' \
-      --textbox '\nDevido a algum erro inesperado ou a propria escolha do usuario, a acao foi cancelada.\n\nRetornando ao menu anterior.' \
-      0 0
+      --pause '\nDevido a algum erro inesperado ou a propria escolha do usuario, a acao foi cancelada.\n\nRetornando ao menu anterior.' \
+      0 0 4
+   $backTo
+}
+
+commSuccess(){
+   clear
+   dialog \
+      --backtitle 'Gerenciador de Processos' \
+      --title 'Sucesso' \
+      --pause '\nComando executado com sucesso!' \
+      0 0 2
    $backTo
 }
 
@@ -337,8 +347,8 @@ menuEditProc(){ # Escolher como alterar determinado processo
    case $menuEditProc in # Inicio da condição que complementa o menu acima definindo as ações que cada escolha vai desencadear.
       Prioridade) reniceProc ;; # Caso seja escolhida a opção "Prioridade", o usuário será encaminhado diretamente para a função 'reniceProc'.
       Sinal) sigProc ;; # Caso seja escolhida a opção "Sinal", o usuário será encaminhado diretamente para a função 'sigProc'.
-      Primeiro-Plano) bg $getProc || errorMsg ;; # Caso seja escolhida a opção "Primeiro-Plano", o processo escolhido anteriormente na função 'getProc' será trazido para o 'Primeiro plano'.
-      Plano-de-Fundo) fg $getProc || errorMsg ;; # Caso seja escolhida a opção "Segundo-Plano", o processo escolhido anteriormente na função 'getProc' será enviado para o 'Segundo plano'.
+      Primeiro-Plano) bg $getProc || errorMsg ; backTo=menuEditProc ; commSuccess ;; # Caso seja escolhida a opção "Primeiro-Plano", o processo escolhido anteriormente na função 'getProc' será trazido para o 'Primeiro plano'.
+      Plano-de-Fundo) fg $getProc || errorMsg ; backTo=menuEditProc ; commSuccess ;; # Caso seja escolhida a opção "Segundo-Plano", o processo escolhido anteriormente na função 'getProc' será enviado para o 'Segundo plano'.
       Informacoes) procInfo ;; # Caso seja escolhida a opção "Informações", o usuário será encaminhado diretamente para a função 'procInfo'.
       Filhos) procFilhos ;; # Caso seja escolhida a opção "Filhos", o usuário será encaminhado diretamente para a função 'procFilhos'.
       Threads) procThreads ;; # Caso seja escolhida a opção "Threads", o usuário será encaminhado diretamente para a função 'procThreads'.

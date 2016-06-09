@@ -3,7 +3,7 @@
 # FATEC São Caetano
 # Sistemas Operacionais - N3
 #===============================================================================
-# William Hanemann da Silva - william.hanemann@gmail.com
+# William Hanemann da Silva - williamhanemann@gmail.com
 # Lucas de Paula - lucasdepaulags@gmail.com
 # Kaio Cesar Ramos - kaio_cesar_ramos@hotmail.com
 #===============================================================================

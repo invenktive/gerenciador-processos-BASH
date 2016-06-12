@@ -11,7 +11,7 @@
 # (https://github.com/invenktive/gerenciador-processos-BASH/blob/master/ScriptN3.sh)
 #===============================================================================
 #
-#                       Script Gerenciador de Processos v0.1.0
+#                       Script Gerenciador de Processos v0.1.2
 #
 # Este script foi criado para facilitar o gerenciamento dos processos do linux
 # Entre suas funcionalidades, encontram-se:
@@ -58,16 +58,6 @@ procGetUsr="$USER" # Define este usuário como padrão para a listagem de proces
 procStateGrep='-' # Define '-' como escolha padrão para o filtro de estados de processos.
 procInfoColumns="stat=Estado,nlwp=No.Threads,lwp=ThreadID,pri=Prioridade,ni=Nice,pcpu,pmem,rss=RAM,vsz=Mem.Total,user=Usuario,cmd=ComandoCompleto" # Define estas colunas como padrão para informações do processo.
 procInfoSort="lwp" # Define esta coluna como padrão para classificar as informações do processo.
-
-commSuccess(){
-   clear
-   dialog \
-      --backtitle 'Gerenciador de Processos' \
-      --title 'Sucesso' \
-      --pause '\nComando executado com sucesso!' \
-      0 0 2
-   $backTo
-}
 
 procInfo(){ # Função: Informacoes sobre determinado(s) processos
    backTo=menuEditProc # Determina a função 'menuEditProc' (Menu "Editar processo Específico") como padrão para voltar.
@@ -141,7 +131,7 @@ getProc(){ # Função: Escolher processo específico.
             --title 'Escolher Processo' \
             --checklist 'Quais processos deseja gerenciar?' \
             0 0 0 \
-            $(ps --no-header -o user,pid,comm | tr -s " "  | cut -d " " -f 2,3 | cat -E  | cut -d"$" -f 1- --output-delimiter " off ") || $backTo) ; menuEditProc ;;
+            $(ps -u $procGetUsr --no-header -o user,pid,comm | tr -s " "  | cut -d " " -f 2,3 | cat -E  | cut -d"$" -f 1- --output-delimiter " off ") || $backTo) ; menuEditProc ;;
       # Acima: Caso a escolha seja "Lista", mostra um menu com uma lista dos processos disponíveis.
       # Vai para o menu onde os processos escolhidos poderão ser gerenciados.
 	  PID) getProc=$( \
@@ -153,15 +143,14 @@ getProc(){ # Função: Escolher processo específico.
          0 0 || $backTo) ; menuEditProc ;;
       # Acima: Caso a escolha seja "PID", o usuário insere, através do dialog, o(s) PID(s) que desejar.
       # Vai para o menu onde os processos escolhidos poderão ser gerenciados.
-      Localizar) findPID=$( \
-         ps -C \
-            $(dialog \
+      Localizar) findPID=$(procName=$( \
+            dialog \
                --backtitle 'Gerenciador de Processos' \
                --stdout \
                --title 'Localizador de PIDs' \
                --inputbox 'Digite o nome do processo' \
                0 0 || $backTo) \
-            --no-header -o user,pid,cmd | tr -s " " | cut -d' ' -f2 | paste -sd' ') \
+            ; ps -C $procName --no-header -u $procGetUsr -o user,pid,cmd | grep -x "\S\+\s\+\S\+\s\+$procName" | tr -s " " | cut -d' ' -f2 | paste -sd' ') \
          ; dialog \
             --backtitle 'Gerenciador de Processos' \
             --stdout \
@@ -338,8 +327,8 @@ menuEditProc(){ # Escolher como alterar determinado processo
    case $menuEditProc in # Inicio da condição que complementa o menu acima definindo as ações que cada escolha vai desencadear.
       Prioridade) reniceProc ;; # Caso seja escolhida a opção "Prioridade", o usuário será encaminhado diretamente para a função 'reniceProc'.
       Sinal) sigProc ;; # Caso seja escolhida a opção "Sinal", o usuário será encaminhado diretamente para a função 'sigProc'.
-      Primeiro-Plano) bg $getProc ; backTo=menuEditProc ; commSuccess ;; # Caso seja escolhida a opção "Primeiro-Plano", o processo escolhido anteriormente na função 'getProc' será trazido para o 'Primeiro plano'.
-      Plano-de-Fundo) fg $getProc ; backTo=menuEditProc ; commSuccess ;; # Caso seja escolhida a opção "Segundo-Plano", o processo escolhido anteriormente na função 'getProc' será enviado para o 'Segundo plano'.
+      Primeiro-Plano) bg $getProc ; backTo=menuEditProc ;; # Caso seja escolhida a opção "Primeiro-Plano", o processo escolhido anteriormente na função 'getProc' será trazido para o 'Primeiro plano'.
+      Plano-de-Fundo) fg $getProc ; backTo=menuEditProc ;; # Caso seja escolhida a opção "Segundo-Plano", o processo escolhido anteriormente na função 'getProc' será enviado para o 'Segundo plano'.
       Informacoes) procInfo ;; # Caso seja escolhida a opção "Informações", o usuário será encaminhado diretamente para a função 'procInfo'.
       Filhos) procFilhos ;; # Caso seja escolhida a opção "Filhos", o usuário será encaminhado diretamente para a função 'procFilhos'.
       Threads) procThreads ;; # Caso seja escolhida a opção "Threads", o usuário será encaminhado diretamente para a função 'procThreads'.
@@ -530,8 +519,9 @@ procGetUsr(){ #Função: Escolher usuário ao qual os processos a serem listados
          --title 'Escolher usuario' \
          --menu 'Deseja visualizar os processos de qual usuario?' \
          0 0 0 \
-         $(cut -d: -f1,2,3 /etc/passwd | grep -e [5-9][0-9][0-9] | cut -d: -f1,3 --output-delimiter=" > :" | cut -d: -f1) || $backTo)
-		# A fim de preencher automaticamente o menu do dialog com os usuários comuns disponíveis no S.O., o arquivo 'passwd' é filtrado pelos UIDs 500 à 999; em seguida, o 'cut' é utilizado para separar o nome de usuário e adicionar uma seta ('>') destinada a não deixar uma das colunas do menu com aspas simples vazias (i.e. " username '' "). 
+         $(cut -d: -f1,2,3 /etc/passwd | grep -e [1][0-9][0-9][0-9] | cut -d: -f1,3 --output-delimiter=" > :" | cut -d: -f1) || $backTo)
+		 # $(grep [5-9][0-9][0-9] /etc/passwd | cut -d: -f1,3 --output-delimiter=" > :" | cut -d: -f1) || $backTo)
+   # A fim de preencher automaticamente o menu do dialog com os usuários comuns disponíveis no S.O., o comando 'grep' filtra o arquivo 'passwd' pelos UIDs 500 à 999; em seguida, o 'cut' é utilizado para separar o nome de usuário e adicionar uma seta ('>') destinada a não deixar uma das colunas do menu com aspas simples vazias (i.e. " username '' "). 
    $backTo # Volta para a função pré-determinada.
 } # Fim da função.
 
@@ -549,9 +539,9 @@ menuNmon(){ # Função: Executar Nmon.
       'Disco' '' \
       'Recursos' '' \
       'Rede' '' \
-      'Kernel' '' \
+	  'Kernel' '' \
       'Filesystems' '' || $backTo
-#################################################################Continuar Menu Nmon
+
    $backTo # Volta para a função pré-determinada.
 } # Fim da função.
 

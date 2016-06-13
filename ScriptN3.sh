@@ -11,7 +11,7 @@
 # (https://github.com/invenktive/gerenciador-processos-BASH/blob/master/ScriptN3.sh)
 #===============================================================================
 #
-#                       Script Gerenciador de Processos v0.1.2
+#                       Script Gerenciador de Processos v0.2.0
 #
 # Este script foi criado para facilitar o gerenciamento dos processos do linux
 # Entre suas funcionalidades, encontram-se:

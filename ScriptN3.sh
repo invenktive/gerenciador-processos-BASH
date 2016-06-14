@@ -518,7 +518,6 @@ procSortColumns(){ # Função: Escolher coluna a ser utilizada na classificaçã
 procGetUsr(){ #Função: Escolher usuário ao qual os processos a serem listados pertencem.
    backTo=index # Determina a função 'index' (Menu principal) como padrão para voltar.
    clear # Limpa a tela.
-   procGetUsr='root'
    procGetUsr=$( \
       (dialog \
          --backtitle 'Gerenciador de Processos' \

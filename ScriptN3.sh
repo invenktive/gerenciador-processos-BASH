@@ -43,10 +43,6 @@
 # Obs.: O script deve ser executado com privilegios administrativos. (e.g. sudo, root)
 #
 #===============================================================================
-#
-# USO: 'sudo ./Script.sh'
-# 
-#===============================================================================
 
 # Variaveis
 

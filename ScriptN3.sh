@@ -252,10 +252,10 @@ menuCreateProc() { # Função: Escolher como iniciar um novo processo.
          'Segundo' 'Segundo Plano' || $backTo))
    case $bgfgNewProc in
       Primeiro) bgfgNewProc="Primeiro Plano" ; bgfgNewProcDo='' ;;
-      Segundo) bgfgNewProc="Segundo Plano" ; bgfgNewProcDo='&' ;;
+      Segundo) bgfgNewProc="Segundo Plano" ; bgfgNewProcDo='2>&1 &' ;;
    esac
       # Acima: Escolha para iniciar o processo em primeiro ou segundo plano.
-      # Caso a escolha seja "Segundo Plano", é adicionado o '&' à variável que complementará o comando futuramente. Caso contrário, ela fica vazia.
+      # Caso a escolha seja "Segundo Plano", é adicionado o '2>&1 &' à variável para redirecionar as saidas stderr e stdout e manter o shell atual limpo.
    confirmNewProc=$( \
       (dialog \
          --backtitle 'Gerenciador de Processos' \
@@ -304,9 +304,32 @@ runNewProc(){ # Inicia processo recém criado em 'menuCreateProc'.
       then # Caso a escolha do menu tenha sido DIFERENTE de "O arquivo ja é executavel"...
          chmod $pExDo $pathNewProc # ...Executa o 'chmod' conforme opção escolhida.
    fi # Fim da condição
-   nice -n $niceNewProc $pathNewProc $argsNewProc $bgfgNewProcDo # Então o comando 'nice' inicia o processo recém "criado" com as opções (incluindo, obviamente, a prioridade) escolhidas.
+   getJobAndPID=$(nice -n $niceNewProc $pathNewProc $argsNewProc $bgfgNewProcDo)
+   # Acima: Então o comando 'nice' inicia o processo recém "criado" com as opções (incluindo, obviamente, a prioridade) escolhidas.
    $backTo # Volta para a função pré-determinada.
 } # Fim da função
+
+bringFg(){
+   backTo=menuEditProc
+   clear
+   jobList=$( \
+      echo $( \
+         jobs | rev | cat -E | rev) > $tmpOutput \
+         ; echo "$" >> $tmpOutput \
+         ; fgProcID=$(cat $tmpOutput) \
+         ; echo $fgProcID | rev | tr -d ' ' | cut -d"$" -f 1- --output-delimiter="' '' '" | cut -c 2- | rev | cut -c 6- )
+   getFgProc=$( \
+      dialog \
+         --backtitle 'Gerenciador de Processos' \
+         --stdout \
+         --title 'Qual processo deseja trazer para o primeiro plano?' \
+         --menu '' \
+         0 0 0 \
+         $(echo $jobList) || $backTo)
+   fgProcID=$(echo $getFgProc | cut -d']' -f 1 | cut -c 3-)
+   fg $fgProcID
+   $backTo
+}
 
 menuEditProc(){ # Escolher como alterar determinado processo
    backTo=procChooseMode # Determina a função 'procChooseMode' (Menu de Processos) como padrão para voltar.
@@ -331,8 +354,8 @@ menuEditProc(){ # Escolher como alterar determinado processo
    case $menuEditProc in # Inicio da condição que complementa o menu acima definindo as ações que cada escolha vai desencadear.
       Prioridade) reniceProc ;; # Caso seja escolhida a opção "Prioridade", o usuário será encaminhado diretamente para a função 'reniceProc'.
       Sinal) sigProc ;; # Caso seja escolhida a opção "Sinal", o usuário será encaminhado diretamente para a função 'sigProc'.
-      Primeiro-Plano) bg $getProc ; backTo=menuEditProc ;; # Caso seja escolhida a opção "Primeiro-Plano", o processo escolhido anteriormente na função 'getProc' será trazido para o 'Primeiro plano'.
-      Plano-de-Fundo) fg $getProc ; backTo=menuEditProc ;; # Caso seja escolhida a opção "Segundo-Plano", o processo escolhido anteriormente na função 'getProc' será enviado para o 'Segundo plano'.
+      Primeiro-Plano) bringFg ;; # Caso seja escolhida a opção "Primeiro-Plano", o processo escolhido anteriormente na função 'getProc' será trazido para o 'Primeiro plano'.
+      Plano-de-Fundo) kill -19 $getProc ; kill -18 $getProc ; backTo=menuEditProc ;; # Caso seja escolhida a opção "Segundo-Plano", o processo escolhido anteriormente na função 'getProc' será enviado para o 'Segundo plano'.
       Informacoes) procInfo ;; # Caso seja escolhida a opção "Informações", o usuário será encaminhado diretamente para a função 'procInfo'.
       Filhos) procFilhos ;; # Caso seja escolhida a opção "Filhos", o usuário será encaminhado diretamente para a função 'procFilhos'.
       Threads) procThreads ;; # Caso seja escolhida a opção "Threads", o usuário será encaminhado diretamente para a função 'procThreads'.
@@ -518,6 +541,7 @@ procSortColumns(){ # Função: Escolher coluna a ser utilizada na classificaçã
 procGetUsr(){ #Função: Escolher usuário ao qual os processos a serem listados pertencem.
    backTo=index # Determina a função 'index' (Menu principal) como padrão para voltar.
    clear # Limpa a tela.
+   procGetUsr='root'
    procGetUsr=$( \
       (dialog \
          --backtitle 'Gerenciador de Processos' \

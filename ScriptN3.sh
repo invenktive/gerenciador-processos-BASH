@@ -304,7 +304,7 @@ runNewProc(){ # Inicia processo recém criado em 'menuCreateProc'.
       then # Caso a escolha do menu tenha sido DIFERENTE de "O arquivo ja é executavel"...
          chmod $pExDo $pathNewProc # ...Executa o 'chmod' conforme opção escolhida.
    fi # Fim da condição
-   getJobAndPID=$(nice -n $niceNewProc $pathNewProc $argsNewProc $bgfgNewProcDo)
+   nice -n $niceNewProc $pathNewProc $argsNewProc $bgfgNewProcDo
    # Acima: Então o comando 'nice' inicia o processo recém "criado" com as opções (incluindo, obviamente, a prioridade) escolhidas.
    $backTo # Volta para a função pré-determinada.
 } # Fim da função

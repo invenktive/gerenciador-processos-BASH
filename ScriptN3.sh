@@ -21,13 +21,13 @@
 #      -Escolher quais informações devem ser mostradas na listagem e sua ordem de vizualização
 #      -Escolher como será sorteada a visualização
 #   -Listar apenas processos em determinado estado
-#   -Gerenciar vários processos específicos simultaneamente:
+#   -Gerenciar um ou mais processos específicos simultaneamente:
 #      -Localizador de PIDs com função de selecionar automaticamente os PIDs encontrados
 #      -Possibilidade de digitar os PIDs
 #      -Escolher os PIDs a partir de uma lista
 #      -Alterar prioridades dos processos
 #      -Enviar sinais
-#      -Trazê-los para Primeiro plano
+#      -Trazê-los para Primeiro plano escolhendo a partir de uma lista de jobs
 #      -Enviá-los para Segundo Plano
 #      -Visualizar informações sobre os processos selecionados
 #      -Visualizar processos filhos dos selecionados e informações sobre eles
@@ -47,11 +47,6 @@
 # USO: 'sudo ./Script.sh'
 # 
 #===============================================================================
-#
-# To-Do: -Testar bg/fg
-#        -Comentar modificações
-#
-#===============================================================================
 
 # Variaveis
 
@@ -59,7 +54,7 @@ tmpHeader="$(mktemp)" # Cria arquivo temporário e armazena o caminho na variáv
 tmpOutput="$(mktemp)" # Idem, mas armazena na variável tmpOutput.
 procGetColumns="user,pid:7,nlwp:7,pri:7,ni:7,pcpu:7,pmem:7,rss:9,vsz:9,stat:6,cmd" # Define estas colunas como padrão para a listagem de processos.
 procSortColumns="pid" # Define esta coluna como padrão para classificar a listagem de processos.
-procGetUsr="$USER" # Define este usuário como padrão para a listagem de processos.
+procGetUsr="$USER" # Define este usuário (root) como padrão para a listagem de processos.
 procStateGrep='-' # Define '-' como escolha padrão para o filtro de estados de processos.
 procInfoColumns="stat:6=Estado,nlwp:7=No.Threads,lwp:7=ThreadID,pri:7=Prioridade,ni:7=Nice,pcpu:7,pmem:7,rss:9=RAM,vsz:9=Mem.Total,user=Usuario,cmd=ComandoCompleto" # Define estas colunas como padrão para informações do processo.
 procInfoSort="lwp" # Define esta coluna como padrão para classificar as informações do processo.
@@ -127,7 +122,7 @@ getProc(){ # Função: Escolher processo específico.
          Lista '' \
          PID '' \
          Localizar '' || $backTo))
-      # Acima: Menu para o usuário escolher como deseja inserir o(s) PID(s) do(s) processo(s).
+      # Acima: Menu para o usuário escolher como deseja selecionar o(s) processo(s).
    case $getProcChoice in # Condição complementar ao menu acima que define o que fazer a cada escolha.
       Lista) getProc=$( \
          (dialog \
@@ -138,6 +133,7 @@ getProc(){ # Função: Escolher processo específico.
             0 0 0 \
             $(ps -u $procGetUsr --no-header -o user,pid,comm | tr -s " " | cut -d " " -f 2,3 | cat -E | cut -d"$" -f 1- --output-delimiter " off ") || $backTo)) ; menuEditProc ;;
       # Acima: Caso a escolha seja "Lista", mostra um menu com uma lista dos processos disponíveis.
+      # A lista é obtida a partir do corte, adições e substituições na saída do comando ps.
       # Vai para o menu onde os processos escolhidos poderão ser gerenciados.
       PID) getProc=$( \
          (dialog \
@@ -165,10 +161,9 @@ getProc(){ # Função: Escolher processo específico.
                $(ps -C $procName --no-header -u $procGetUsr -o user,pid,cmd | tr -s ' ' | grep "\S\+\s\+\S\+\s\+\S\+$procName" | grep -v grep | cut -d ' ' -f 2,3 | cat -E | cut -d"$" -f 1- --output-delimiter " off ") || $backTo)) \
          ; getProc=$findPID \
          ; menuEditProc ;;
-      # Acima: Caso a escolha seja "Localizar", o usuário insere, através do dialog, o nome do processo que procura; o comando ps lista os processos com este nome.
-      # Utilizando a filtragem no comando ps, é extraida uma lista de PIDs que é formatada adequadamente para uso futuro.
+      # Acima: Caso a escolha seja "Localizar", o usuário insere, através do dialog, o nome do processo que procura; a partir do comando ps, após filtragem, cortes, adições e substituições, é criada uma lista dos processos com este nome, de onde são extraidos os PIDs formatados adequadamente para uso futuro.
+      *) $backTo ;; # Caso nenhuma condição seja satisfeita, volta para função definida como padrão (no início da função atual).
    esac # Fim da condição.
-   $backTo # Volta para a função pré-determinada.
 } # Fim da função
 
 menuCreateProc() { # Função: Escolher como iniciar um novo processo.
@@ -189,7 +184,6 @@ menuCreateProc() { # Função: Escolher como iniciar um novo processo.
          --title 'Iniciar Processo: Caminho' \
          --yesno "Caminho para o processo:\n\n $pathNewProc \n\nEsta correto?" \
          0 0 || $backTo))
-         
       # Acima: Confirmação do caminho do processo
    argsNewProc=$( \
       (dialog \
@@ -250,12 +244,12 @@ menuCreateProc() { # Função: Escolher como iniciar um novo processo.
          0 0 0 \
          'Primeiro' 'Primeiro Plano' \
          'Segundo' 'Segundo Plano' || $backTo))
-   case $bgfgNewProc in
-      Primeiro) bgfgNewProc="Primeiro Plano" ; bgfgNewProcDo='' ;;
-      Segundo) bgfgNewProc="Segundo Plano" ; bgfgNewProcDo='2>&1 &' ;;
+      # Acima: Opção para iniciar o processo em primeiro ou segundo plano.
+   case $bgfgNewProc in # Início da condição que complementa o menu definindo quais ações realizar com dependência à escolha realizada.
+      Primeiro) bgfgNewProc="Primeiro Plano" ; bgfgNewProcDo='' ;; # Para iniciar em primeiro plano, a variavel que finalizará o comando (logo abaixo) fica vazia.
+      Segundo) bgfgNewProc="Segundo Plano" ; bgfgNewProcDo='2>&1 &' ;; # A variavel que finalizará o comando (logo abaixo) recebe o valor 2>&1, para encaminhar o descritor stderr para o stdout, e o '&' para iniciar o processo em segundo plano.
+      *) $backTo ;; # Caso nenhuma condição seja satisfeita, volta para função definida como padrão (no início da função atual).
    esac
-      # Acima: Escolha para iniciar o processo em primeiro ou segundo plano.
-      # Caso a escolha seja "Segundo Plano", é adicionado o '2>&1 &' à variável para redirecionar as saidas stderr e stdout e manter o shell atual limpo.
    confirmNewProc=$( \
       (dialog \
          --backtitle 'Gerenciador de Processos' \
@@ -270,11 +264,10 @@ menuCreateProc() { # Função: Escolher como iniciar um novo processo.
             0 0 ; $backTo)))
       runNewProc
       # Acima: Confirmação das informações colhidas. Caso estejam corretas, vai para a função que executa o novo processo (runNewProc), caso contrário, exibe mensagem de erro e volta para a função padrão (Menu de Processos)
-   $backTo # Volta para a função pré-determinada.
 } # Fim da função
 
 procFilhos(){ # Função: Exibir os processos filhos do(s) processo(s) selecionado(s).
-   backTo=menuEditProc #Determina a função 'menuEditProc' (Menu "Editar processo Específico") como padrão para voltar.
+   backTo=menuEditProc # Determina a função 'menuEditProc' (Menu "Editar processo Específico") como padrão para voltar.
    clear # Limpa a tela
    ps --header --lines 15 -o $procInfoColumns --sort $procInfoSort --ppid $getProc > $tmpOutput # Armazena as informações sobre os processos filhos do escolhido na variável $tmpOutput.
    (dialog \
@@ -309,15 +302,16 @@ runNewProc(){ # Inicia processo recém criado em 'menuCreateProc'.
    $backTo # Volta para a função pré-determinada.
 } # Fim da função
 
-bringFg(){
-   backTo=menuEditProc
-   clear
+bringFg(){ # Trazer processo para primeiro plano
+   backTo=menuEditProc # Determina a função 'menuEditProc' (Menu "Editar processo Específico") como padrão para voltar.
+   clear # Limpa a tela
    jobList=$( \
       echo $( \
          jobs | rev | cat -E | rev) > $tmpOutput \
          ; echo "$" >> $tmpOutput \
          ; fgProcID=$(cat $tmpOutput) \
          ; echo $fgProcID | rev | tr -d ' ' | cut -d"$" -f 1- --output-delimiter="' '' '" | cut -c 2- | rev | cut -c 6- )
+   # Acima: É criada uma lista dos jobs ativos utilizando cortes, inversoes, adições e trocas de chars, entre outras formas, no comando jobs.
    getFgProc=$( \
       dialog \
          --backtitle 'Gerenciador de Processos' \
@@ -326,9 +320,10 @@ bringFg(){
          --menu '' \
          0 0 0 \
          $(echo $jobList) || $backTo)
-   fgProcID=$(echo $getFgProc | cut -d']' -f 1 | cut -c 3-)
-   fg $fgProcID
-   $backTo
+   # Acima: Utilizando o resultado da variável 'jobList' (Acima), o menu lista as opções para que o usuário defina qual processo trazer para o primeiro plano.
+   fgProcID=$(echo $getFgProc | cut -d']' -f 1 | cut -c 3-) # A opção escolhida é recortada para manter apenas o 'jobID'.
+   fg $fgProcID # O comando 'fg' utiliza o jobID para trazer o processo para primeiro plano.
+   $backTo # Volta para a função pré-determinada.
 }
 
 menuEditProc(){ # Escolher como alterar determinado processo
@@ -361,8 +356,8 @@ menuEditProc(){ # Escolher como alterar determinado processo
       Threads) procThreads ;; # Caso seja escolhida a opção "Threads", o usuário será encaminhado diretamente para a função 'procThreads'.
       Outro) getProc ;;  # Caso seja escolhida a opção "Outro", o usuário será encaminhado diretamente para a função 'getProc'.
       Voltar) procChooseMode ;;  # Caso seja escolhida a opção "Voltar", o usuário será encaminhado diretamente para o menu anterior (Menu de Processos/Função 'procChooseMode').
+      *) $backTo ;; # Caso nenhuma condição seja satisfeita, volta para função definida como padrão (no início da função atual).
    esac # Fim da condição.
-   $backTo # Volta para a função pré-determinada.
 } # Fim da função.
 
 procState(){ # Função: Escolher quais processos listar
@@ -430,8 +425,8 @@ procChooseMode(){ # Função: Menu de processos.
       Novo) menuCreateProc ;; # Caso seja escolhida a opção "Novo", o usuário será encaminhado diretamente para a função 'menuCreateProc'.
       Usuario) procGetUsr ;; # Caso seja escolhida a opção "Usuário", o usuário será encaminhado diretamente para a função 'procGetUsr'.
       Voltar) index ;;  # Caso seja escolhida a opção "Voltar", o usuário será encaminhado diretamente para o menu principal (função 'index').
+      *) $backTo ;; # Caso nenhuma condição seja satisfeita, volta para função definida como padrão (no início da função atual).
    esac # Fim da condição
-   $backTo # Volta para a função pré-determinada.
 } # Fim da função.
 
 procList(){ # Função: Listar Processos
@@ -549,20 +544,21 @@ procGetUsr(){ #Função: Escolher usuário ao qual os processos a serem listados
          --title 'Escolher usuario' \
          --menu 'Deseja visualizar os processos de qual usuario?' \
          0 0 0 \
-         $(cut -d: -f1,2,3 /etc/passwd | grep -e [1][0-9][0-9][0-9] | cut -d: -f1,3 --output-delimiter=" > :" | cut -d: -f1) || $backTo))
-         #Para RedHat: grep [5-9][0-9][0-9]
-   if [ $procGetUsr == 'root' ]
-      then
+         $(cut -d: -f1,2,3 /etc/passwd | grep -e [1][0-9][0-9][0-9] | cut -d: -f1,3 --output-delimiter=" " | cut -d: -f1) || $backTo))
+         ## Para RedHat: grep -e [5-9][0-9][0-9]  --  Para Debian: grep -e [1][0-9][0-9][0-9] ##
+         # O arquivo 'passwd' é recortado e filtrado por UIDs 500 à 999 (RedHat). Em seguida, adaptado, através de recortes, ao modelo para ser usado como opções do menu.
+   if [ $procGetUsr == 'root' ] # Início da condição em que:
+      then # Caso o valor da variável ainda seja "root"...
          (dialog \
             --backtitle 'Gerenciador de Processos' \
             --stdout \
             --title 'Erro' \
             --msgbox 'Impossivel continuar como root.' \
             0 0 || $backTo)
-      else
-         procChooseMode
-   fi
-   # A fim de preencher automaticamente o menu do dialog com os usuários comuns disponíveis no S.O., o comando 'grep' filtra o arquivo 'passwd' pelos UIDs 500 à 999; em seguida, o 'cut' é utilizado para separar o nome de usuário e adicionar uma seta ('>') destinada a não deixar uma das colunas do menu com aspas simples vazias (i.e. " username '' "). 
+         # Acima: ...é exibida uma mensagem de erro e o script volta para o menu principal.
+      else # Caso contrário...
+         procChooseMode # ...continua para o menu de processos.
+   fi # Fim da condição.
    $backTo # Volta para a função pré-determinada.
 } # Fim da função.
 
@@ -589,8 +585,8 @@ menuNmon(){ # Função: Executar Nmon.
       'n' 'Rede' off \
       'k' 'Kernel' off \
       'j' 'Filesystem' off || $backTo ) | cut -d' ' -f 1- --output-delimiter="")
-#   nmonExport=$(echo "$nmonExport" | cut -d' ' -f 1- --output-delimiter="")
-   runNmon
+   # Acima: O menu lista as opções para o usuário e a escolha é recortada para servir ao modelo a ser utilizado mais tarde.
+   runNmon # Continua para a função onde o 'nmon' será executado.
 } # Fim da função.
 
 confirmExit(){ # Função: Confirmação de saída do script.
@@ -623,8 +619,8 @@ index() { # Função: Menu Principal
       Gerenciar) procGetUsr ;; # Caso seja escolhida a opção "Gerenciar", o usuário será encaminhado a escolha do usuário (função 'procGetUsr').
       Nmon) menuNmon ;; # Caso seja escolhida a opção "menuNmon", o usuário será encaminhado para o menu de execução do Nmon.
       Sair) confirmExit ;; # Caso seja escolhida a opção "Sair", o usuário será encaminhado diretamente para a confirmação de saída (função 'confirmExit').
+      *) confirmExit ;; # Caso nenhuma condição seja satisfeita, o usuário será encaminhado diretamente para a confirmação de saída (função 'confirmExit').
    esac # Fim da condição.
-   #$backTo # Volta para a função pré-determinada.
 } # Fim da função.
 
 # Início do script: Validando o acesso administrativo. (Primeira parte executada pelo script)

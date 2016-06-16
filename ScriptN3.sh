@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 #===============================================================================    
 # FATEC São Caetano
 # Sistemas Operacionais - N3
@@ -11,7 +11,7 @@
 # (https://github.com/invenktive/gerenciador-processos-BASH/blob/master/ScriptN3.sh)
 #===============================================================================
 #
-#                       Script Gerenciador de Processos v0.2.0
+#                       Script Gerenciador de Processos v0.2.1
 #
 # Este script foi criado para facilitar o gerenciamento dos processos do linux
 # Entre suas funcionalidades, encontram-se:
@@ -55,23 +55,26 @@ procStateGrep='-' # Define '-' como escolha padrão para o filtro de estados de 
 procInfoColumns="stat:6=Estado,nlwp:7=No.Threads,lwp:7=ThreadID,pri:7=Prioridade,ni:7=Nice,pcpu:7,pmem:7,rss:9=RAM,vsz:9=Mem.Total,user=Usuario,cmd=ComandoCompleto" # Define estas colunas como padrão para informações do processo.
 procInfoSort="lwp" # Define esta coluna como padrão para classificar as informações do processo.
 
-procInfo(){ # Função: Informacoes sobre determinado(s) processos
-   backTo=menuEditProc # Determina a função 'menuEditProc' (Menu "Editar processo Específico") como padrão para voltar.
+procInfo() { # Função: Informacoes sobre determinado(s) processos
    clear # Limpa a tela
    ps --header --lines 15 -o $procInfoColumns --sort $procInfoSort $getProc > $tmpOutput # Armazena as informações sobre o processo escolhido na variável $tmpOutput.
-   (dialog \
+   dialog \
       --backtitle 'Gerenciador de Processos' \
       --title 'Informacoes do Processo' \
       --textbox $tmpOutput \
-      0 0 || $backTo) # Caixa de texto do Dialog exibindo as informações que foram gravadas em $tmpOutput. Caso retorne erro, volta para a função pré determinada.
-   $backTo # Volta para a função pré-determinada.
+      0 0
+   # Acima: Caixa de texto do Dialog exibindo as informações que foram gravadas em $tmpOutput.
+   if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0, o usuário irá para a confirmação de saída do script.
+      then
+         confirmExit
+   fi
+   menuEditProc # Vai para o menu de gerenciamento de processos específicos.
 } # Fim da função.
 
 sigProc() { # Função: Enviar sinal ao processo
-   backTo=menuEditProc # Determina a função 'menuEditProc' (Menu "Editar processo Específico") como padrão para voltar.
    clear # Limpa a tela
-   kill -s $( \
-         (dialog \
+   killSig=$( \
+      dialog \
          --backtitle 'Gerenciador de Processos' \
          --stdout \
          --title 'Enviar Interrupcao' \
@@ -84,123 +87,232 @@ sigProc() { # Função: Enviar sinal ao processo
          'KILL' 'Terminar imediatamente. Nao pode ser ignorado. [-9]' \
          'TERM' 'Terminar o processo [-15]' \
          'CONT' 'Continuar processo "pausado" [-18]' \
-         'STOP' '"Pausar" o processo [-19]' || $backTo)) \
-      -a $getProc
-   # Acima: Menu em dialog para usuário escolher qual sinal enviar para o processo. E comando kill, que utiliza a escolha para enviá-lo.
-   $backTo # Volta para a função pré-determinada.
+         'STOP' '"Pausar" o processo [-19]' )
+   # Acima: Menu em dialog para usuário escolher qual sinal enviar para o processo.
+   if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0, o usuário irá para a confirmação de saída do script.
+      then
+         confirmExit
+   fi
+   kill -s $killSig -a $getProc # Utiliza a escolha do usuário para enviar o sinal.
+   if [ $? -eq 0 ] # Se o retorno do dialog for igual a 0 (Sem "Erros"), mostra mensagem de sucesso, caso contrário, de falha.
+      then
+         dialog \
+            --sleep 1 \
+            --backtitle 'Gerenciador de Processos' \
+            --title 'Sucesso' \
+            --infobox "\nComando executado com sucesso!\n" \
+            0 0
+      else
+         dialog \
+            --sleep 1 \
+            --backtitle 'Gerenciador de Processos' \
+            --title 'Falha' \
+            --infobox "\nFalha na execucao do comando!\n" \
+            0 0
+   fi
+   menuEditProc # Vai para o menu de gerenciamento de processos específicos.
 } # Fim da função.
 
-reniceProc(){ # Função: Alterar prioridade (renice)
-   backTo=menuEditProc #Determina a função 'menuEditProc' (Menu "Editar processo Específico") como padrão para voltar.
+reniceProc() { # Função: Alterar prioridade (renice)
    clear # Limpa a tela
-   renice -n $( \
-         (dialog \
-         --backtitle 'Gerenciador de Processos' \
-         --stdout \
-         --title 'Alterar Prioridade' \
-         --rangebox '\nUtilize as teclas +/-/setas para ajustar a barra conforme a prioridade que deseja.\n\nLembre-se: quanto menor o numero, maior a prioridade' \
-         0 0 -20 +20 0 || $backTo)) \
-      -p $getProc
-   # Acima: Menu em dialog para usuário alterar a prioridade do processo. E comando renice, que utiliza a escolha para alterá-la.
-   $backTo # Volta para a função pré-determinada.
+      renicePrio=$( \
+         dialog \
+            --backtitle 'Gerenciador de Processos' \
+            --stdout \
+            --title 'Alterar Prioridade' \
+            --rangebox '\nUtilize as teclas +/-/setas para ajustar a barra conforme a prioridade que deseja.\n\nLembre-se: quanto menor o numero, maior a prioridade' \
+            0 0 -20 +20 0 )
+   # Acima: Caixa do dialog para usuário alterar a prioridade do processo. E comando renice, que utiliza a escolha para alterá-la.
+      if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0, o usuário irá para a confirmação de saída do script.
+         then
+            confirmExit
+      fi
+   renice -n $renicePrio -p $getProc
+   if [ $? -eq 0 ] # Se o retorno do dialog for igual a 0 (Sem "Erros"), mostra mensagem de sucesso, caso contrário, de falha.
+      then
+         dialog \
+            --sleep 1 \
+            --backtitle 'Gerenciador de Processos' \
+            --title 'Sucesso' \
+            --infobox "\nComando executado com sucesso!\n" \
+            0 0
+      else
+         dialog \
+            --sleep 1 \
+            --backtitle 'Gerenciador de Processos' \
+            --title 'Falha' \
+            --infobox "\nFalha na execucao do comando!\n" \
+            0 0
+   fi
+   menuEditProc # Vai para o menu de gerenciamento de processos específicos.
 } # Fim da função.
 
 getProc(){ # Função: Escolher processo específico.
-   backTo=procChooseMode # Determina a função 'procChooseMode' (Menu de Processos) como padrão para voltar.
    clear # Limpa a tela
    getProcChoice=$( \
-      (dialog \
+      dialog \
          --backtitle 'Gerenciador de Processos' \
          --stdout \
+         --nocancel \
          --title 'Escolher Processo' \
          --menu '\nDeseja inserir o PID do processo ou escolhe-lo em uma Lista? \n\nObs.: Para localizar o PID de um processo, selecione "Localizar"' \
          0 0 0 \
          Lista '' \
          PID '' \
-         Localizar '' || $backTo))
-      # Acima: Menu para o usuário escolher como deseja selecionar o(s) processo(s).
+         Localizar '' )
+   # Acima: Menu para o usuário escolher como deseja selecionar o(s) processo(s).
+   if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0, o usuário irá para a confirmação de saída do script.
+      then
+         confirmExit
+   fi
    case $getProcChoice in # Condição complementar ao menu acima que define o que fazer a cada escolha.
       Lista) getProc=$( \
-         (dialog \
+         dialog \
             --backtitle 'Gerenciador de Processos' \
             --stdout \
+            --output-separator ' ' \
             --title 'Escolher Processo' \
             --checklist 'Quais processos deseja gerenciar?' \
             0 0 0 \
-            $(ps -u $procGetUsr --no-header -o user,pid,comm | tr -s " " | cut -d " " -f 2,3 | cat -E | cut -d"$" -f 1- --output-delimiter " off ") || $backTo)) ; menuEditProc ;;
+            $( ps -u $procGetUsr --no-header -o user,pid,comm | tr -s " " | cut -d " " -f 2,3 | cat -E | cut -d"$" -f 1- --output-delimiter " off " ) ) \
+            ; if [ $? -ne 0 ] \
+               ; then if [ $? -eq 1 ] \
+                  ; then procChooseMode \
+                  ; else confirmExit \
+               ; fi \
+            ; fi \
+            ; menuEditProc ;;
       # Acima: Caso a escolha seja "Lista", mostra um menu com uma lista dos processos disponíveis.
       # A lista é obtida a partir do corte, adições e substituições na saída do comando ps.
       # Vai para o menu onde os processos escolhidos poderão ser gerenciados.
+      # Se o retorno do dialog for diferente de 0, mas não 1, o usuário irá para a confirmação de saída do script. Caso seja 1 (Cancelar), volta para o menu.
       PID) getProc=$( \
-         (dialog \
+         dialog \
             --backtitle 'Gerenciador de Processos' \
             --stdout \
             --title 'Escolher Processo' \
             --inputbox 'Digite o PID. Para varios PIDs, separe-os utilizando espacos.\n\nAtencao para a digitacao correta!' \
-            0 0 || $backTo)) ; menuEditProc ;;
+            0 0 ) \
+            ; if [ $? -ne 0 ] \
+               ; then if [ $? -eq 1 ] \
+                  ; then procChooseMode \
+                  ; else confirmExit \
+               ; fi \
+            ; fi \
+            ; menuEditProc ;;
       # Acima: Caso a escolha seja "PID", o usuário insere, através do dialog, o(s) PID(s) que desejar.
       # Vai para o menu onde os processos escolhidos poderão ser gerenciados.
+      # Se o retorno do dialog for diferente de 0, mas não 1, o usuário irá para a confirmação de saída do script. Caso seja 1 (Cancelar), volta para o menu.
       Localizar) procName=$( \
-         (dialog \
+         dialog \
             --backtitle 'Gerenciador de Processos' \
             --stdout \
             --title 'Localizador de PIDs' \
             --inputbox 'Digite o nome do processo' \
-            0 0 || $backTo)) \
+            0 0 ) \
+            ; if [ $? -ne 0 ] \
+               ; then if [ $? -eq 1 ] \
+                  ; then procChooseMode \
+                  ; else confirmExit \
+               ; fi \
+            ; fi \
          ; findPID=$( \
-            (dialog \
+            dialog \
                --backtitle 'Gerenciador de Processos' \
                --stdout \
+               --output-separator ' ' \
                --title 'Escolher Processo' \
                --checklist 'Processos encontrados:\nQuais deles deseja gerenciar?' \
                0 0 0 \
-               $(ps -C $procName --no-header -u $procGetUsr -o user,pid,cmd | tr -s ' ' | grep "\S\+\s\+\S\+\s\+\S\+$procName" | grep -v grep | cut -d ' ' -f 2,3 | cat -E | cut -d"$" -f 1- --output-delimiter " off ") || $backTo)) \
+               $( ps -C $procName --no-header -u $procGetUsr -o user,pid,cmd | tr -s ' ' | grep "\S\+\s\+\S\+\s\+\S\+$procName" | grep -v grep | cut -d ' ' -f 2,3 | cat -E | cut -d"$" -f 1- --output-delimiter " off " ) ) \
+            ; if [ $? -ne 0 ] \
+               ; then if [ $? -eq 1 ] \
+                  ; then procChooseMode \
+                  ; else confirmExit \
+               ; fi \
+            ; fi \
          ; getProc=$findPID \
          ; menuEditProc ;;
       # Acima: Caso a escolha seja "Localizar", o usuário insere, através do dialog, o nome do processo que procura; a partir do comando ps, após filtragem, cortes, adições e substituições, é criada uma lista dos processos com este nome, de onde são extraidos os PIDs formatados adequadamente para uso futuro.
-      *) $backTo ;; # Caso nenhuma condição seja satisfeita, volta para função definida como padrão (no início da função atual).
+      # Se o retorno do dialog for diferente de 0, mas não 1, o usuário irá para a confirmação de saída do script. Caso seja 1 (Cancelar), volta para o menu.
    esac # Fim da condição.
 } # Fim da função
 
 menuCreateProc() { # Função: Escolher como iniciar um novo processo.
-   backTo=procChooseMode # Determina a função 'procChooseMode' (Menu de Processos) como padrão para voltar.
    clear # Limpa a tela.
    pathNewProc=$( \
-      (dialog \
+      dialog \
          --backtitle 'Gerenciador de Processos' \
          --stdout \
          --title 'Iniciar Processo: Caminho' \
          --fselect '/' \
-         20 60 || $backTo))
-      # Acima: Opção do dialog para escolher o caminho do processo que deverá ser iniciado.
+         20 60 )
+   # Acima: Opção do dialog para escolher o caminho do processo que deverá ser iniciado.
+   if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0 (Botão OK):
+      then
+         if [ $? -eq 1 ] # Se o retorno do dialog for igual a 1 (Botão Cancelar), volta ao menu anterior.
+            then
+               procChooseMode
+            else # Caso contrário, vai para confirmação de encerramento.
+               confirmExit
+         fi
+   fi
    pathNewProcIsOk=$( \
-      (dialog \
+      dialog \
          --backtitle 'Gerenciador de Processos' \
          --stdout \
          --title 'Iniciar Processo: Caminho' \
          --yesno "Caminho para o processo:\n\n $pathNewProc \n\nEsta correto?" \
-         0 0 || $backTo))
-      # Acima: Confirmação do caminho do processo
+         0 0 )
+   # Acima: Confirmação do caminho do processo
+   if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0 (Botão OK):
+      then
+         if [ $? -eq 1 ] # Se o retorno do dialog for igual a 1 (Botão Cancelar), volta ao menu anterior.
+            then
+               procChooseMode
+            else # Caso contrário, vai para confirmação de encerramento.
+               confirmExit
+         fi
+   fi
    argsNewProc=$( \
-      (dialog \
+      dialog \
          --backtitle 'Gerenciador de Processos' \
          --stdout \
          --title 'Iniciar Processo: Argumentos' \
          --inputbox 'Digite os argumentos para a inicializacao do processo (e.g. -eLf, --help). Deixe em branco para "nenhum".' \
-         0 0 || $backTo)) 
-      # Acima: Dialog onde usuário poderá inserir, opcionalmente, argumentos para a inicializacao do processo.
+         0 0 ) 
+   # Acima: Dialog onde usuário poderá inserir, opcionalmente, argumentos para a inicializacao do processo.
+   if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0 (Botão OK):
+      then
+         if [ $? -eq 1 ] # Se o retorno do dialog for igual a 1 (Botão Cancelar), volta ao menu anterior.
+            then
+               procChooseMode
+            else # Caso contrário, vai para confirmação de encerramento.
+               confirmExit
+         fi
+   fi
    niceNewProc=$( \
-      (dialog \
+      dialog \
          --backtitle 'Gerenciador de Processos' \
          --stdout \
          --title 'Iniciar processo: Prioridade' \
          --rangebox '\nUtilize as teclas +/-/setas para ajustar a barra conforme a prioridade que deseja.\n\nLembre-se: quanto menor o numero, maior a prioridade' \
-         0 0 -20 +20 0 || $backTo)) 
-      # Acima: Dialog para definir a prioridade com a qual o processo deverá ser iniciado.
+         0 0 -20 +20 0 )
+   # Acima: Dialog para definir a prioridade com a qual o processo deverá ser iniciado.
+   if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0 (Botão OK):
+      then
+         if [ $? -eq 1 ] # Se o retorno do dialog for igual a 1 (Botão Cancelar), volta ao menu anterior.
+            then
+               procChooseMode
+            else # Caso contrário, vai para confirmação de encerramento.
+               confirmExit
+         fi
+   fi
    pExNewProc=$( \
-      (dialog \
+      dialog \
          --backtitle 'Gerenciador de Processos' \
          --stdout \
+         --nocancel \
          --title 'Iniciar Processo: Perm. de Exec.' \
          --menu 'Quanto a permissao de execucao:' \
          0 0 0 \
@@ -208,86 +320,113 @@ menuCreateProc() { # Função: Escolher como iniciar um novo processo.
          '2' 'Torna-lo executavel com u+x' \
          '3' 'Torna-lo executavel com g+x' \
          '4' 'Torna-lo executavel com o+x' \
-         '5' 'Torna-lo executavel com a+x' || $backTo))
+         '5' 'Torna-lo executavel com a+x' )
       # Acima: Opção para escolher como tornar o arquivo executável.
-   if [ $pExNewProc == '1' ] # Inicio da condição que define o que vai ser feito de acordo com a escolha do menu acima.
+   if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0 (Botão OK):
+      then
+         confirmExit
+   fi
+   if [ $pExNewProc == '1' ] # Inicio das condições que definem o que vai ser feito de acordo com a escolha do menu acima.
       then # Dependendo da escolha, as variaveis recebem determinado valor que será usado mais tarde.
          pExConfirm='O arquivo ja eh executavel'
          pExDo='-'
-      elif [ $pExNewProc == '2' ]
-         then
-            pExConfirm='Torna-lo executavel com u+x'
-            pExDo='u+x'
-      elif [ $pExNewProc == '3' ]
-         then
-            pExConfirm='Torna-lo executavel com g+x'
-            pExDo='g+x'
-      elif [ $pExNewProc == '4' ]
-         then
-            pExConfirm='Torna-lo executavel com o+x'
-            pExDo='o+x'
-      elif [ $pExNewProc == '5' ]
-         then
-            pExConfirm='Torna-lo executavel com a+x'
-            pExDo='a+x'
-   fi # Fim da condição
-   bgfgNewProc=$( \
-      (dialog \
+   fi
+   if [ $pExNewProc == '2' ]
+      then
+         pExConfirm='Torna-lo executavel com u+x'
+         pExDo='u+x'
+   fi
+   if [ $pExNewProc == '3' ]
+      then
+         pExConfirm='Torna-lo executavel com g+x'
+         pExDo='g+x'
+   fi
+   if [ $pExNewProc == '4' ]
+      then
+         pExConfirm='Torna-lo executavel com o+x'
+         pExDo='o+x'
+   fi
+   if [ $pExNewProc == '5' ]
+      then
+         pExConfirm='Torna-lo executavel com a+x'
+         pExDo='a+x'
+   fi # Fim das condições
+   bgfgNewProcM=$( \
+      dialog \
          --backtitle 'Gerenciador de Processos' \
          --stdout \
+         --nocancel \
          --title 'Iniciar Processo: Bg/Fg' \
          --menu "\nDeseja iniciar o processo em primeiro ou segundo plano?\n" \
          0 0 0 \
          'Primeiro' 'Primeiro Plano' \
-         'Segundo' 'Segundo Plano' || $backTo))
-      # Acima: Opção para iniciar o processo em primeiro ou segundo plano.
-   case $bgfgNewProc in # Início da condição que complementa o menu definindo quais ações realizar com dependência à escolha realizada.
+         'Segundo' 'Segundo Plano' )
+   # Acima: Opção para iniciar o processo em primeiro ou segundo plano.
+   if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0 (Botão OK):
+      then
+         confirmExit
+   fi
+   case $bgfgNewProcM in # Início da condição que complementa o menu definindo quais ações realizar com dependência à escolha realizada.
       Primeiro) bgfgNewProc="Primeiro Plano" ; bgfgNewProcDo='' ;; # Para iniciar em primeiro plano, a variavel que finalizará o comando (logo abaixo) fica vazia.
       Segundo) bgfgNewProc="Segundo Plano" ; bgfgNewProcDo='2>&1 &' ;; # A variavel que finalizará o comando (logo abaixo) recebe o valor 2>&1, para encaminhar o descritor stderr para o stdout, e o '&' para iniciar o processo em segundo plano.
-      *) $backTo ;; # Caso nenhuma condição seja satisfeita, volta para função definida como padrão (no início da função atual).
    esac
    confirmNewProc=$( \
-      (dialog \
+      dialog \
          --backtitle 'Gerenciador de Processos' \
          --stdout \
          --title 'Iniciar Processo: Confirmacao' \
          --yesno "\nEstas informacoes estao corretas?\n\nCaminho: $pathNewProc\nArgumentos: $argsNewProc\nPrioridade: $niceNewProc\nPermissao de execucao: $pExConfirm\nExecutar em $bgfgNewProc\n" \
-         0 0 || (dialog \
-            --sleep 1 \
-            --backtitle 'Gerenciador de Processos' \
-            --title '' \
-            --infobox "\nOperacao abortada!\n" \
-            0 0 ; $backTo)))
-      runNewProc
-      # Acima: Confirmação das informações colhidas. Caso estejam corretas, vai para a função que executa o novo processo (runNewProc), caso contrário, exibe mensagem de erro e volta para a função padrão (Menu de Processos)
+         0 0 )
+   if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0 (Botão Sim/OK):
+      then
+         if [ $? -eq 1 ] # Se o retorno do dialog for igual a 1 (Botão Não/Cancelar), volta ao menu anterior.
+            then
+               dialog \
+                  --sleep 1 \
+                  --backtitle 'Gerenciador de Processos' \
+                  --title '' \
+                  --infobox "\nOperacao abortada!\n" \
+                  0 0
+               procChooseMode
+         else
+            confirmExit
+         fi
+   fi
+   runNewProc
+   # Acima: Confirmação das informações colhidas. Caso estejam corretas, vai para a função que executa o novo processo (função 'runNewProc'), caso contrário, exibe mensagem de erro e volta para a função padrão (Menu de Processos)
 } # Fim da função
 
 procFilhos(){ # Função: Exibir os processos filhos do(s) processo(s) selecionado(s).
-   backTo=menuEditProc # Determina a função 'menuEditProc' (Menu "Editar processo Específico") como padrão para voltar.
    clear # Limpa a tela
    ps --header --lines 15 -o $procInfoColumns --sort $procInfoSort --ppid $getProc > $tmpOutput # Armazena as informações sobre os processos filhos do escolhido na variável $tmpOutput.
-   (dialog \
+   dialog \
       --backtitle 'Gerenciador de Processos' \
       --title 'Processos Filhos' \
       --textbox $tmpOutput \
-      0 0 || $backTo) # Caixa de texto do Dialog exibindo as informações que foram gravadas em $tmpOutput.
-   $backTo # Volta para a função pré-determinada.
+      0 0 # Caixa de texto do Dialog exibindo as informações que foram gravadas em $tmpOutput.
+   if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0, o usuário irá para a confirmação de saída do script.
+      then
+         confirmExit
+   fi
+   menuEditProc # Vai para o menu de gerenciamento de processos específicos.
 }
 
 procThreads(){ # Função: Exibir as threads do(s) processo(s) selecionado(s).
-   backTo=menuEditProc #Determina a função 'menuEditProc' (Menu "Editar processo Específico") como padrão para voltar.
    clear # Limpa a tela
    ps --header --lines 15 m -o $procInfoColumns --sort $procInfoSort $getProc > $tmpOutput # Armazena as informações sobre as threads do processo escolhido na variável $tmpOutput.
-   (dialog \
+   dialog \
       --backtitle 'Gerenciador de Processos' \
       --title 'Processos Filhos' \
       --textbox $tmpOutput \
-      0 0 || $backTo) # Caixa de texto do Dialog exibindo as informações que foram gravadas em $tmpOutput.
-   $backTo # Volta para a função pré-determinada.
+      0 0 # Caixa de texto do Dialog exibindo as informações que foram gravadas em $tmpOutput.
+   if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0, o usuário irá para a confirmação de saída do script.
+      then
+         confirmExit
+   fi
+   menuEditProc # Vai para o menu de gerenciamento de processos específicos.
 }
 
 runNewProc(){ # Inicia processo recém criado em 'menuCreateProc'.
-   backTo=procChooseMode # Determina a função 'procChooseMode' (Menu de Processos) como padrão para voltar.
    clear # Limpa a tela
    if [ $pExDo != '-' ] #Condição que executa o comando 'chmod' apenas quando necessário. Conforme escolha no menu da função anterior (menuCreateProc).
       then # Caso a escolha do menu tenha sido DIFERENTE de "O arquivo ja é executavel"...
@@ -295,42 +434,69 @@ runNewProc(){ # Inicia processo recém criado em 'menuCreateProc'.
    fi # Fim da condição
    nice -n $niceNewProc $pathNewProc $argsNewProc $bgfgNewProcDo
    # Acima: Então o comando 'nice' inicia o processo recém "criado" com as opções (incluindo, obviamente, a prioridade) escolhidas.
-   $backTo # Volta para a função pré-determinada.
+   procChooseMode # Volta para a função menu de processos.
 } # Fim da função
 
 bringFg(){ # Trazer processo para primeiro plano
-   backTo=menuEditProc # Determina a função 'menuEditProc' (Menu "Editar processo Específico") como padrão para voltar.
    clear # Limpa a tela
-   jobList=$( \
-      echo $( \
-         jobs | rev | cat -E | rev) > $tmpOutput \
-         ; echo "$" >> $tmpOutput \
-         ; fgProcID=$(cat $tmpOutput) \
-         ; echo $fgProcID | rev | tr -d ' ' | cut -d"$" -f 1- --output-delimiter="' '' '" | cut -c 2- | rev | cut -c 6- )
-   # Acima: É criada uma lista dos jobs ativos utilizando cortes, inversoes, adições e trocas de chars, entre outras formas, no comando jobs.
-   getFgProc=$( \
-      dialog \
-         --backtitle 'Gerenciador de Processos' \
-         --stdout \
-         --title 'Qual processo deseja trazer para o primeiro plano?' \
-         --menu '' \
-         0 0 0 \
-         $(echo $jobList) || $backTo)
-   # Acima: Utilizando o resultado da variável 'jobList' (Acima), o menu lista as opções para que o usuário defina qual processo trazer para o primeiro plano.
-   fgProcID=$(echo $getFgProc | cut -d']' -f 1 | cut -c 3-) # A opção escolhida é recortada para manter apenas o 'jobID'.
-   fg $fgProcID # O comando 'fg' utiliza o jobID para trazer o processo para primeiro plano.
-   $backTo # Volta para a função pré-determinada.
+   if [[ $(jobs) ]] # "Existem jobs?"
+      then # Caso existam jobs...
+         jobList=$( \
+            echo $( jobs | rev | cat -E | rev ) > $tmpOutput \
+               ; echo "$" >> $tmpOutput \
+               ; fgProcID=$( cat $tmpOutput ) \
+               ; echo $fgProcID | rev | tr -d ' ' | cut -d"$" -f 1- --output-delimiter="' '' '" | cut -c 2- | rev | cut -c 6- )
+         # Acima: É criada uma lista dos jobs ativos utilizando cortes, inversoes, adições e trocas de chars, entre outras formas, no comando jobs.
+         getFgProc=$( \
+            dialog \
+               --backtitle 'Gerenciador de Processos' \
+               --stdout \
+               --title 'Qual processo deseja trazer para o primeiro plano?' \
+               --menu '' \
+               0 0 0 \
+               $( echo $jobList ) )
+         # Acima: Utilizando o resultado da variável 'jobList' (Acima), o menu lista as opções para que o usuário defina qual processo trazer para o primeiro plano.
+         if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0, o usuário irá para a confirmação de saída do script.
+            then
+               confirmExit
+         fi
+         fgProcID=$( echo $getFgProc | cut -d']' -f 1 | cut -c 3- ) # A opção escolhida é recortada para manter apenas o 'jobID'.
+         fg $fgProcID # O comando 'fg' utiliza o jobID para trazer o processo para primeiro plano.
+         if [ $? -eq 0 ] # Se o retorno do dialog for igual a 0 (Sem "Erros"), mostra mensagem de sucesso, caso contrário, de falha.
+            then
+               dialog \
+                  --sleep 1 \
+                  --backtitle 'Gerenciador de Processos' \
+                  --title 'Sucesso' \
+                  --infobox "\nComando executado com sucesso!\n" \
+                  0 0
+            else
+               dialog \
+                  --sleep 1 \
+                  --backtitle 'Gerenciador de Processos' \
+                  --title 'Falha' \
+                  --infobox "\nFalha na execucao do comando!\n" \
+                  0 0
+         fi
+      else
+         dialog \
+            --backtitle 'Gerenciador de Processos' \
+            --stdout \
+            --title 'Aviso' \
+            --msgbox 'Nao existem jobs a serem listados' \
+            0 0
+      fi
+   menuEditProc # Vai para o menu de gerenciamento de processos específicos.
 }
 
 menuEditProc(){ # Escolher como alterar determinado processo
-   backTo=procChooseMode # Determina a função 'procChooseMode' (Menu de Processos) como padrão para voltar.
    clear # Limpa a tela
-   menuEditProc=$( \
-      (dialog \
+   menuEditProcVar=$( \
+      dialog \
          --backtitle 'Gerenciador de Processos' \
          --stdout \
-         --title 'Editar Processo Especifico' \
-         --menu '' \
+         --title 'Gerenciar Processo Especifico' \
+         --menu 'Escolha uma opcao:' \
          0 0 0 \
          'Prioridade' 'Alterar prioridade' \
          'Sinal' 'Enviar sinal(signal) para Sair/Abortar/Parar/Continuar/...' \
@@ -340,27 +506,47 @@ menuEditProc(){ # Escolher como alterar determinado processo
          'Filhos' 'Exibir os processos filhos do processo selecionado' \
          'Threads' 'Exibir as threads do processo selecionado' \
          'Outro' 'Escolher outro processo' \
-         'Voltar' 'Voltar ao menu de processos' || $backTo))
+         'Voltar' 'Voltar ao menu de processos' )
          # Acima: Menu do dialog onde o usuário escolhe o que deseja fazer com um ou mais processos específicos.
-   case $menuEditProc in # Inicio da condição que complementa o menu acima definindo as ações que cada escolha vai desencadear.
+   if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0, o usuário irá para a confirmação de saída do script.
+      then
+         confirmExit
+   fi
+   case $menuEditProcVar in # Inicio da condição que complementa o menu acima definindo as ações que cada escolha vai desencadear.
       Prioridade) reniceProc ;; # Caso seja escolhida a opção "Prioridade", o usuário será encaminhado diretamente para a função 'reniceProc'.
       Sinal) sigProc ;; # Caso seja escolhida a opção "Sinal", o usuário será encaminhado diretamente para a função 'sigProc'.
       Primeiro-Plano) bringFg ;; # Caso seja escolhida a opção "Primeiro-Plano", o processo escolhido anteriormente na função 'getProc' será trazido para o 'Primeiro plano'.
-      Plano-de-Fundo) kill -19 $getProc ; kill -18 $getProc ; backTo=menuEditProc ;; # Caso seja escolhida a opção "Segundo-Plano", o processo escolhido anteriormente na função 'getProc' será enviado para o 'Segundo plano'.
+      Plano-de-Fundo) kill -19 $getProc \
+         ; ok1=$( echo $? ) \
+         ; kill -18 $getProc \
+         ; ok2=$( echo $? ) \
+         ; if [ $ok1 -eq 0 ] && [ $ok2 -eq 0 ] \
+            ; then dialog \
+               --sleep 1 \
+               --backtitle 'Gerenciador de Processos' \
+               --title 'Sucesso' \
+               --infobox "\nComando executado com sucesso!\n" \
+               0 0 \
+            ; else dialog \
+               --sleep 1 \
+               --backtitle 'Gerenciador de Processos' \
+               --title 'Falha' \
+               --infobox "\nFalha na execucao do comando!\n" \
+               0 0 \
+         ; fi \
+         ;  menuEditProc ;; # Caso seja escolhida a opção "Segundo-Plano", o processo escolhido anteriormente na função 'getProc' será enviado para o 'Segundo plano'. Em caso de erro em algum dos comandos 'kill', a mensagem de falha é mostrada; caso contrário, a de sucesso.
       Informacoes) procInfo ;; # Caso seja escolhida a opção "Informações", o usuário será encaminhado diretamente para a função 'procInfo'.
       Filhos) procFilhos ;; # Caso seja escolhida a opção "Filhos", o usuário será encaminhado diretamente para a função 'procFilhos'.
       Threads) procThreads ;; # Caso seja escolhida a opção "Threads", o usuário será encaminhado diretamente para a função 'procThreads'.
       Outro) getProc ;;  # Caso seja escolhida a opção "Outro", o usuário será encaminhado diretamente para a função 'getProc'.
       Voltar) procChooseMode ;;  # Caso seja escolhida a opção "Voltar", o usuário será encaminhado diretamente para o menu anterior (Menu de Processos/Função 'procChooseMode').
-      *) $backTo ;; # Caso nenhuma condição seja satisfeita, volta para função definida como padrão (no início da função atual).
    esac # Fim da condição.
 } # Fim da função.
 
-procState(){ # Função: Escolher quais processos listar
-   backTo=procChooseMode # Determina a função 'procChooseMode' (Menu de Processos) como padrão para voltar.
+procState() { # Função: Escolher quais processos listar
    clear # Limpa a tela.
    procStateGrep=$( \
-      (dialog \
+      dialog \
          --backtitle 'Gerenciador de Processos' \
          --stdout \
          --title 'Escolher Estado' \
@@ -372,8 +558,12 @@ procState(){ # Função: Escolher quais processos listar
          'X' 'Morto (Dead)' off \
          'Z' 'Zumbi (Defunct)' off \
          'D' 'Sono nao interrompivel (Uninterruptible Sleep)' off \
-         'S' 'Sono interrompivel (Interruptible Sleep)' off || $backTo))
+         'S' 'Sono interrompivel (Interruptible Sleep)' off )
          # Acima: Radiolist do dialog onde o usuário escolhe de qual estado listar os processos.
+   if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0, o usuário irá para a confirmação de saída do script.
+      then
+         confirmExit
+   fi
    if [ $procStateGrep == '-' ] # Inicio da condição em que...
       then # ...caso a escolha, no menu anterior, tenha sido IGUAL a '-'...
          procList # ...vai direto para a função 'procList'.
@@ -383,22 +573,26 @@ procState(){ # Função: Escolher quais processos listar
          echo -e "PID\tPPID\tNo.Threads\tPrioridade\tNice\tUso CPU\tUso Mem\tRAM\tMem.Total\tUsuario\tComandoCompleto" > $tempHeader
          # Acima: E o cabeçalho das colunas é armazenado em outro arquivo temporário para ser utilizado, mais tarde, na concatenação.
          cat $tmpHeader $tmpOutput # Então o cabeçalho das colunas é concatenado no arquivo populado pelo 'ps' para facilitar o discernimento das informações.
-         (dialog \
+         dialog \
             --backtitle 'Gerenciador de Processos' \
             --title "Processos com o estado $procStateGrep" \
             --textbox $tmpOutput \
-            0 0 || $backTo)
+            0 0
+         if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0, o usuário irá para a confirmação de saída do script.
+            then
+               confirmExit
+         fi
          # Em seguida, o dialog exibe as informações do arquivo final, onde as informações dos processos escolhidos estão, junto com o seu cabeçalho.
    fi # E termina a condição.
-   $backTo # Volta para a função pré-determinada.
+   procChooseMode # Volta para a função menu de processos.
 } # Fim da função.
 
-procChooseMode(){ # Função: Menu de processos.
-   backTo=index # Determina a função 'index' (Menu Principal) como padrão para voltar.
+procChooseMode() { # Função: Menu de processos.
    clear # Limpa a tela
-   procChooseMode=$( \
-      (dialog \
+   menuChooseMode=$( \
+      dialog \
          --backtitle 'Gerenciador de Processos' \
+         --nocancel \
          --stdout \
          --title 'Menu de processos' \
          --menu 'O que deseja fazer agora?' \
@@ -410,9 +604,13 @@ procChooseMode(){ # Função: Menu de processos.
          'Especifico' 'Gerenciar um processo especifico' \
          'Novo' 'Iniciar novo processo com determinadas opcoes' \
          'Usuario' 'Escolher outro usuario' \
-         'Voltar' 'Voltar ao menu principal' || $backTo))
+         'Voltar' 'Voltar ao menu principal' )
    # Acima: Menu do dialog onde o usuário define o que deseja fazer.
-   case $procChooseMode in # Inicio da condição que complementa o menu definindo a ação de cada escolha.
+   if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0, o usuário irá para a confirmação de saída do script.
+      then
+         confirmExit
+   fi
+   case $menuChooseMode in # Inicio da condição que complementa o menu definindo a ação de cada escolha.
       Listar) procList ;; # Caso seja escolhida a opção "Listar", o usuário será encaminhado diretamente para a função 'procList'.
       Colunas) procGetColumns ;; # Caso seja escolhida a opção "Colunas", o usuário será encaminhado diretamente para a função 'procGetColumns'.
       Sortear) procSortColumns ;; # Caso seja escolhida a opção "Sortear", o usuário será encaminhado diretamente para a função 'procSortColumns'.
@@ -421,32 +619,34 @@ procChooseMode(){ # Função: Menu de processos.
       Novo) menuCreateProc ;; # Caso seja escolhida a opção "Novo", o usuário será encaminhado diretamente para a função 'menuCreateProc'.
       Usuario) procGetUsr ;; # Caso seja escolhida a opção "Usuário", o usuário será encaminhado diretamente para a função 'procGetUsr'.
       Voltar) index ;;  # Caso seja escolhida a opção "Voltar", o usuário será encaminhado diretamente para o menu principal (função 'index').
-      *) $backTo ;; # Caso nenhuma condição seja satisfeita, volta para função definida como padrão (no início da função atual).
    esac # Fim da condição
 } # Fim da função.
 
-procList(){ # Função: Listar Processos
-   backTo=procChooseMode # Determina a função 'procChooseMode' (Menu de Processos) como padrão para voltar.
+procList() { # Função: Listar Processos
    clear # Limpa a tela
    ps -L -u $procGetUsr --header --lines 15 -o $procGetColumns --sort $procSortColumns > $tmpOutput
    # Acima: Comando 'ps' lista os processos conforme as escolhas do usuário quanto à "Usuário dono do processo", "Colunas a serem exibidas" e "Classificar utilizando qual coluna".
    # A saída do comando ps foi enviada para o arquivo temporário.
-   (dialog \
+   dialog \
       --backtitle 'Gerenciador de Processos' \
       --title 'Lista de processos' \
       --textbox $tmpOutput \
-      0 0 || $backTo)
+      0 0
+   if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0, o usuário irá para a confirmação de saída do script.
+      then
+         confirmExit
+   fi
    # Acima: Dialog exibe, em uma caixa de texto, o arquivo temporário utilizado logo acima.
-   $backTo # Volta para a função pré-determinada.
+   procChooseMode # Volta para a função menu de processos.
 } # Fim da função.
 
-procGetColumns(){ # Função: Escolher colunas da listagem
-   backTo=procChooseMode # Determina a função 'procChooseMode' (Menu de Processos) como padrão para voltar.
+procGetColumns() { # Função: Escolher colunas da listagem
    clear # Limpa a tela
    procGetColumns=$( \
-      (dialog \
+      dialog \
          --backtitle 'Gerenciador de Processos' \
          --stdout \
+         --nocancel \
          --visit-items \
          --title 'Escolher colunas' \
          --buildlist 'Quais informações sobre os processos deseja visualizar?' \
@@ -479,19 +679,23 @@ procGetColumns(){ # Função: Escolher colunas da listagem
          'tid:7' 'ID da thread' off \
          'time:10' 'Tempo em que o processo ficou em execucao' off \
          'tty:7' 'Terminal no controle' off \
-         'wchan:7' 'Funcao do kernel onde o processo esta dormindo' off || $backTo))
-      procGetColumns=$(echo $procGetColumns | tr " " ",")
-   # Acima: Os valores escolhidos na lista do dialog são armazenados na variável 'procGetColumns' para serem utilizados na listagem dos processos.
-   $backTo # Volta para a função pré-determinada.
+         'wchan:7' 'Funcao do kernel onde o processo esta dormindo' off )
+   # Acima: Os valores escolhidos na lista do dialog são armazenados na variável 'procGetColumns'.
+   if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0, o usuário irá para a confirmação de saída do script.
+      then
+         confirmExit
+   fi
+   procGetColumns=$( echo $procGetColumns | tr " " "," ) # O conteúdo escolhido no menu é editado para futura utilização.
+   procChooseMode # Volta para a função menu de processos.
 } # Fim da função.
 
-procSortColumns(){ # Função: Escolher coluna a ser utilizada na classificação da lista de processos.
-   backTo=procChooseMode # Determina a função 'procChooseMode' (Menu de Processos) como padrão para voltar.
+procSortColumns() { # Função: Escolher coluna a ser utilizada na classificação da lista de processos.
    clear # Limpa a tela.
    procSortColumns=$( \
-      (dialog \
+      dialog \
          --backtitle 'Gerenciador de Processos' \
          --stdout \
+         --nocancel \
          --visit-items \
          --title 'Escolher classificacao' \
          --menu 'Como deseja classificar a lista?' \
@@ -524,98 +728,129 @@ procSortColumns(){ # Função: Escolher coluna a ser utilizada na classificaçã
          'tty' 'Terminal no controle' \
          'user' 'Nome do usuario dono do processo' \
          'vsz' 'Memoria total alocada' \
-         'wchan' 'Funcao do kernel onde o processo esta dormindo' || $backTo))
+         'wchan' 'Funcao do kernel onde o processo esta dormindo' )
       # Acima: Menu onde deve ser selecionada a coluna utilizada na classificação da lista de processos. Escolha é armazenada na variável a ser utilizada no comando.
-   $backTo # Volta para a função pré-determinada.
+   if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0, o usuário irá para a confirmação de saída do script.
+      then
+         confirmExit
+   fi
+   procChooseMode # Volta para a função menu de processos.
 } # Fim da função.
 
-procGetUsr(){ #Função: Escolher usuário ao qual os processos a serem listados pertencem.
-   backTo=index # Determina a função 'index' (Menu principal) como padrão para voltar.
+procGetUsr() { # Função: Escolher usuário ao qual os processos a serem listados pertencem.
    clear # Limpa a tela.
-   procGetUsr='root'
    procGetUsr=$( \
-      (dialog \
-         --backtitle 'Gerenciador de Processos' \
+      dialog \
          --stdout \
+         --nocancel \
+         --backtitle 'Gerenciador de Processos' \
          --title 'Escolher usuario' \
          --menu 'Deseja visualizar os processos de qual usuario?' \
          0 0 0 \
-         $(cut -d: -f1,2,3 /etc/passwd | grep -e [1][0-9][0-9][0-9] | cut -d: -f1,3 --output-delimiter=" " | cut -d: -f1) || $backTo))
+         $( cut -d: -f1,2,3 /etc/passwd | grep -e [1][0-9][0-9][0-9] | cut -d: -f1,3 --output-delimiter=' ' | cut -d: -f1 ) )
          ## Para RedHat: grep -e [5-9][0-9][0-9]  --  Para Debian: grep -e [1][0-9][0-9][0-9] ##
          # O arquivo 'passwd' é recortado e filtrado por UIDs 500 à 999 (RedHat). Em seguida, adaptado, através de recortes, ao modelo para ser usado como opções do menu.
+   if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0, o usuário irá para a confirmação de saída do script.
+      then
+         confirmExit
+   fi
    if [ $procGetUsr == 'root' ] # Início da condição em que:
       then # Caso o valor da variável ainda seja "root"...
-         (dialog \
+         dialog \
             --backtitle 'Gerenciador de Processos' \
             --stdout \
             --title 'Erro' \
             --msgbox 'Impossivel continuar como root.' \
-            0 0 || $backTo)
+            0 0
          # Acima: ...é exibida uma mensagem de erro e o script volta para o menu principal.
+         if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0, o usuário irá para a confirmação de saída do script.
+            then
+               confirmExit
+         fi
       else # Caso contrário...
          procChooseMode # ...continua para o menu de processos.
    fi # Fim da condição.
-   $backTo # Volta para a função pré-determinada.
+   index # Volta para o menu principal.
 } # Fim da função.
 
-runNmon(){
-   backTo=index # Determina a função 'index' (Menu principal) como padrão para voltar.
+runNmon() { # Função: Executar Nmon.
    clear # Limpa a tela.
-   env NMON=$nmonExport nmon
-   $backTo # Volta para a função pré-determinada.
+   env NMON=$nmonExport nmon # Executa o nmon com a variavel de ambiente 'NMON' contendo as opções do usuário; desta forma, o nmon mostrará diretamente as informações desejadas.
+   if [ $? -ne 0 ] # Se o retorno do dialog for igual a 0 (Sem "Erros"), mostra mensagem de sucesso, caso contrário, de falha.
+      then
+         dialog \
+            --sleep 1 \
+            --backtitle 'Gerenciador de Processos' \
+            --title 'Falha' \
+            --infobox "\nFalha na execucao do comando!\n" \
+            0 0
+   fi
+   index # Volta para o menu principal.
 } # Fim da função.
 
-menuNmon(){ # Função: Executar Nmon.
-   backTo=index # Determina a função 'index' (Menu Principal) como padrão para voltar.
+menuNmon() { # Função: Menu de opções do Nmon
    clear # Limpa a tela.
-   nmonExport=$((dialog \
-      --backtitle 'Gerenciador de Processos' \
-      --stdout \
-      --title 'Menu de informações do Nmon' \
-      --checklist 'O que deseja monitorar?' \
-      0 0 0 \
-      'c' 'CPU' off \
-      'm' 'Memoria' off \
-      'd' 'Disco' off \
-      'r' 'Recursos' off \
-      'n' 'Rede' off \
-      'k' 'Kernel' off \
-      'j' 'Filesystem' off || $backTo ) | cut -d' ' -f 1- --output-delimiter="")
-   # Acima: O menu lista as opções para o usuário e a escolha é recortada para servir ao modelo a ser utilizado mais tarde.
+   menuNmonExport=$( \
+      dialog \
+         --nocancel \
+         --backtitle 'Gerenciador de Processos' \
+         --stdout \
+         --output-separator ' ' \
+         --title 'Menu de informações do Nmon' \
+         --checklist 'O que deseja monitorar?' \
+         0 0 0 \
+         'c' 'CPU' off \
+         'm' 'Memoria' off \
+         'd' 'Disco' off \
+         'r' 'Recursos' off \
+         'n' 'Rede' off \
+         'k' 'Kernel' off \
+         'j' 'Filesystem' off )
+   if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0, o usuário irá para a confirmação de saída do script.
+      then
+         confirmExit
+   fi
+   # Acima: Menu para usuário escolher como deseja interagir com o nmon.
+   nmonExport=$( echo $menuNmonExport | cut -d' ' -f 1- --output-delimiter="" ) # A escolha do usuário é recortada para servir ao modelo a ser utilizado mais tarde.
    runNmon # Continua para a função onde o 'nmon' será executado.
 } # Fim da função.
 
-confirmExit(){ # Função: Confirmação de saída do script.
-   backTo=index # Determina a função 'index' (Menu Principal) como padrão para voltar.
+confirmExit() { # Função: Confirmação de saída do script.
    clear # Limpa a tela.
-   (dialog \
+   dialog \
       --backtitle 'Gerenciador de Processos' \
       --yesno '\nTem certeza que deseja sair?\n' \
-      0 0 || $backTo)
-      # Acima: Dialog pedindo ao usuário confirmação de saída.
+      0 0
+   # Acima: Dialog pedindo ao usuário confirmação de saída.
+   if [ $? -ne 0 ] # Se NÃO for escolhida a opção 'Sim' (Sair), o usuário irá retornar ao menu principal.
+      then index
+   fi
    clear # Caso queira sair, limpa a tela...
    exit # ...e sai do script.
 } # Fim da função.
 
 index() { # Função: Menu Principal
-   backTo=confirmExit # Determina a função 'confirmExit' como padrão para voltar.
    clear # Limpa a tela.
    indexMenu=$( \
-      (dialog \
+      dialog \
+         --stdout \
+         --nocancel \
          --backtitle 'Gerenciador de Processos' \
          --title 'Menu' \
          --menu 'O que deseja fazer?' \
-         --stdout \
          0 0 0 \
          Gerenciar 'Gerenciar processos' \
          Nmon 'Menu de execução do Nmon' \
-         Sair 'Finaliza o script' || $backTo ))
+         Sair 'Finaliza o script' )
+   if [ $? -ne 0 ] # Se o retorno do dialog for diferente de 0, o usuário irá para a confirmação de saída do script.
+      then
+         confirmExit
+   fi
    # Menu do dialog pedindo ao usuário que decida o que fazer.
    case $indexMenu in # Inicio da condição que complementa o menu definindo as consequencias da ação escolhida pelo usuário.
       Gerenciar) procGetUsr ;; # Caso seja escolhida a opção "Gerenciar", o usuário será encaminhado a escolha do usuário (função 'procGetUsr').
       Nmon) menuNmon ;; # Caso seja escolhida a opção "menuNmon", o usuário será encaminhado para o menu de execução do Nmon.
       Sair) confirmExit ;; # Caso seja escolhida a opção "Sair", o usuário será encaminhado diretamente para a confirmação de saída (função 'confirmExit').
-      *) confirmExit ;; # Caso nenhuma condição seja satisfeita, o usuário será encaminhado diretamente para a confirmação de saída (função 'confirmExit').
    esac # Fim da condição.
 } # Fim da função.
 
@@ -623,18 +858,18 @@ index() { # Função: Menu Principal
 clear # Limpa a tela.
 if [ $UID != 0 ] # Condição comparando o UID do usuário atual com o UID do root.
    then # Caso o UID do usuário executando o script seja DIFERENTE de zero (root)...
-      (dialog \
+      dialog \
          --sleep 2 \
          --colors \
          --backtitle 'Gerenciador de Processos' \
          --title 'Abortando Script' \
          --infobox '\n\Z1O acesso administrativo nao pode ser validado.\Zn\n\nTente executar o script novamente utilizando\nprivilegios administrativos (\Z1e.g. sudo\Zn).\n\n' \
-         8 51 || echo "Erro na execucao: $?")
-      # Acima: ...é mostrado um aviso no dialog notificando o usuário de que o script deve ser rodado pelo root, e então...
-      exit # ...o script é encerrado.
+         8 51
+      # Acima: ...é mostrado um aviso no dialog notificando o usuário de que o script deve ser rodado pelo root.
+      exit # E então o script é encerrado.
    else # Caso o UID do usuário executando o script seja IGUAL a zero (root)...
-   index # ...o script continua no menu principal (função 'index').
-fi #Fim da condição
+      index # ...o script continua no menu principal (função 'index').
+fi # Fim da condição
 
 #
 

@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash
 #===============================================================================    
 # FATEC São Caetano
 # Sistemas Operacionais - N3
